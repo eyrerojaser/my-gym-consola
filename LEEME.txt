@@ -1,0 +1,26 @@
+CONSOLA DE CLIENTES DE MI GYM (solo para ti)
+Un sitio APARTE de tu app y de las apps de tus clientas. Ellas no la ven ni saben que existe.
+
+INSTALAR (una sola vez)
+1. GitHub: crea un repositorio nuevo PRIVADO, ej: mi-gym-consola, y sube todo lo de este zip.
+2. Netlify: Add new project > Import from GitHub > mi-gym-consola.
+   Project name: migym-consola  (si ese nombre está ocupado, usa otro y avísale a Claude
+   para cambiar la dirección en la plantilla: netlify/lib/proveedora.mjs).
+   No necesita variables. Deploy.
+3. Netlify > Identity > Enable Identity > Registration: Invite only > Invite users: SOLO tu correo.
+   (No actives Git Gateway: la consola no lo usa.)
+4. Abre el correo de invitación, crea tu contraseña y entra a migym-consola.netlify.app.
+5. (Opcional) En el teléfono: Compartir > Agregar a pantalla de inicio. Queda como "Consola".
+
+USO
+- Mis clientes: cada app de cliente aparece sola como "Nuevo" la primera vez que se abre.
+  Toca "Completar datos": nombre, entrenadora, correo, precio y próximo pago.
+- Marcar como pagado: registra el pago y mueve el próximo pago un mes.
+- Suspender app: su app, su panel y sus recordatorios se pausan en menos de un minuto.
+  Reactivar app: vuelve todo igual. Nada se borra.
+- Cancelar cliente: queda en pausa y marcada como cancelada (te recuerda los 60 días del contrato).
+- Ajustes: "Suspender sola si no paga" y los días de gracia.
+- Tu propia app: ábrela, toca "Completar datos" y activa "Es mi propia app" (siempre activa, sin cobro).
+
+Si la consola no responde por algún motivo, las apps de tus clientas SIGUEN funcionando:
+nunca se bloquea a nadie por un error.

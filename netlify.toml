@@ -1,0 +1,8 @@
+# Consola de clientes de Mi Gym (sitio aparte, solo para la proveedora)
+[build]
+  publish = "."
+  command = "echo 'Consola lista'"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

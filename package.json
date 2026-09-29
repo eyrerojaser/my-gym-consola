@@ -1,0 +1,9 @@
+{
+  "name": "mi-gym-consola",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Consola de clientes de Mi Gym (solo para la proveedora)",
+  "dependencies": {
+    "@netlify/blobs": "^8.2.0"
+  }
+}
