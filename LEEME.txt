@@ -6,10 +6,17 @@ INSTALAR (una sola vez)
 2. Netlify: Add new project > Import from GitHub > mi-gym-consola.
    Project name: migym-consola  (si ese nombre está ocupado, usa otro y avísale a Claude
    para cambiar la dirección en la plantilla: netlify/lib/proveedora.mjs).
-   No necesita variables. Deploy.
-3. Netlify > Identity > Enable Identity > Registration: Invite only > Invite users: SOLO tu correo.
-   (No actives Git Gateway: la consola no lo usa.)
-4. Abre el correo de invitación, crea tu contraseña y entra a migym-consola.netlify.app.
+   Deploy (la contraseña se agrega en el paso 3).
+3. Contraseña (una sola vez): Netlify > sitio de la consola > Project configuration >
+   Environment variables > Add a variable:
+     CONSOLA_CLAVE = la contraseña que tú quieras (mínimo 8 caracteres; mejor 12 o más)
+   Luego Deploys > Trigger deploy > Deploy project.
+   La consola NO usa Identity: si lo habías activado, puedes desactivarlo
+   (Identity > Settings > Disable Identity) o dejarlo en "Invite only".
+4. Entra a migym-consola.netlify.app y escribe tu contraseña. Tu teléfono la recuerda
+   30 días. Después de 5 intentos equivocados, la consola se bloquea 15 minutos.
+   Para cambiar la contraseña: cambia CONSOLA_CLAVE y vuelve a publicar
+   (se cierra la sesión en todos tus dispositivos).
 5. (Opcional) En el teléfono: Compartir > Agregar a pantalla de inicio. Queda como "Consola".
 
 USO

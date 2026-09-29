@@ -1,20 +1,31 @@
 // Consola (solo con sesión iniciada):
+//   POST /api/consola/entrar                   {clave} → pase de 30 días
 //   GET  /api/consola/clientes                 → lista con su estado calculado
 //   GET  /api/consola/ajustes | PUT {auto,dias}
 //   PUT  /api/consola/clientes/:id             {datos}  → editar nombre, entrenadora, correo, precio, próximo pago, notas, propia
 //   POST /api/consola/clientes/:id/pago        {monto, fecha, metodo, nota}
 //   POST /api/consola/clientes/:id/suspender | reactivar | cancelar
 //   DELETE /api/consola/clientes/:id           → quitar de la lista
-import { store, json, err, requireUser, vista, getAjustes, today, addMonth } from '../lib/consola.mjs';
+import { store, json, err, requireUser, vista, getAjustes, today, addMonth, entrar, claveConfigurada } from '../lib/consola.mjs';
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const s = (v, n = 300) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
 const EDIT = { appName: 80, entrenadora: 80, correo: 120, telefono: 40, edicion: 10, notas: 2000 };
 
 export default async (req) => {
+  const parts = new URL(req.url).pathname.replace(/^\/api\/consola\/?/, '').split('/').filter(Boolean);
+  // entrar con la contraseña (no necesita pase)
+  if (parts[0] === 'entrar' && req.method === 'POST') {
+    let b = {}; try { b = await req.json(); } catch {}
+    const r = await entrar(b.clave);
+    if (r.ok) return json({ pase: r.pase });
+    if (r.sinClave) return err(503, 'Falta configurar la contraseña de la consola.', { sinClave: true });
+    if (r.bloqueada) return err(429, `Demasiados intentos. Espera ${r.bloqueada} minutos.`, { bloqueada: r.bloqueada });
+    return err(401, 'Contraseña incorrecta.', { quedan: r.quedan });
+  }
+  if (parts[0] === 'estado-clave' && req.method === 'GET') return json({ configurada: claveConfigurada() });
   const user = await requireUser(req);
   if (!user) return err(401, 'Inicia sesión.');
-  const parts = new URL(req.url).pathname.replace(/^\/api\/consola\/?/, '').split('/').filter(Boolean);
   const [area, id, accion] = parts, M = req.method, st = store();
   try {
     if (area === 'ajustes') {

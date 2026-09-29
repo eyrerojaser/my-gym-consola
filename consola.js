@@ -16,13 +16,15 @@ const S = { user: null, loaded: false, clientes: [], ajustes: { auto: false, dia
 let F = null; // formulario abierto
 
 // ---------- conexión ----------
-async function token() { const ni = window.netlifyIdentity, u = ni && ni.currentUser(); if (!u) return null; try { return await u.jwt(); } catch { return null; } }
+const PASE = 'migym-consola-pase';
+async function token() { try { return localStorage.getItem(PASE); } catch { return null; } }
+function guardarPase(p) { try { if (p) localStorage.setItem(PASE, p); else localStorage.removeItem(PASE); } catch {} }
 async function api(method, path, body) {
   const tk = await token(); if (!tk) { showLogin(); throw new Error('login'); }
   let r; try { r = await fetch(path, { method, headers: { Authorization: 'Bearer ' + tk, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined }); }
   catch { throw new Error('Sin conexión. Revisa tu internet.'); }
   let d = {}; try { d = await r.json(); } catch {}
-  if (r.status === 401) { showLogin(); throw new Error('login'); }
+  if (r.status === 401) { guardarPase(null); showLogin(); throw new Error('login'); }
   if (!r.ok) throw new Error(d.error || 'No se pudo completar.');
   return d;
 }
@@ -151,7 +153,7 @@ function vPago(c) {
 }
 function vAjustes() {
   const a = S.ajustes;
-  return `<div class="wrap">${head('Ajustes', S.user, '#/')}
+  return `<div class="wrap">${head('Ajustes', '', '#/')}
     <div class="card"><button class="switch" role="switch" aria-checked="${a.auto}" data-act="auto"><span><b>Suspender sola si no paga</b><small>Se reactiva sola al registrar el pago</small></span><span class="track"></span></button>
       ${a.auto ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #232B44;padding-top:12px;margin-top:12px"><span style="font-size:14px;color:#C9CEDC">Días de gracia después de la fecha de pago</span>
         <div class="stepper"><button data-act="dias" data-v="-1" aria-label="Menos días">−</button><b>${a.dias}</b><button data-act="dias" data-v="1" aria-label="Más días">+</button></div></div>` : ''}</div>
@@ -198,26 +200,42 @@ document.addEventListener('click', async e => {
       try { S.ajustes = await api('PUT', '/api/consola/ajustes', a); await load(); render(); } catch (er) { if (er.message !== 'login') toast(er.message, true); }
       return;
     }
-    case 'logout': window.netlifyIdentity && window.netlifyIdentity.logout(); return;
+    case 'logout': guardarPase(null); showLogin(); return;
   }
 });
 
-// ---------- inicio de sesión ----------
-function showLogin() {
+// ---------- inicio de sesión (una contraseña) ----------
+function showLogin(msg) {
   S.user = null; S.loaded = false;
-  const ok = !!window.netlifyIdentity;
-  $('#app').innerHTML = `<div class="center"><div class="login"><span class="brand-ico" style="margin:0 auto;width:56px;height:56px;border-radius:16px">${I.grid}</span>
-    <h1 class="cond">Consola</h1><p class="muted">${ok ? 'Inicia sesión para ver tus clientes.' : 'No se pudo cargar el inicio de sesión. Revisa tu internet y recarga.'}</p>
-    ${ok ? '<button class="btn primary" id="loginBtn" style="margin-top:12px">Iniciar sesión</button>' : ''}</div></div>`;
-  const b = $('#loginBtn'); if (b) b.onclick = () => window.netlifyIdentity.open('login');
+  $('#app').innerHTML = `<div class="center"><form class="login" id="loginForm" onsubmit="return false">
+    <span class="brand-ico" style="margin:0 auto;width:56px;height:56px;border-radius:16px">${I.grid}</span>
+    <h1 class="cond">Consola</h1>
+    <label class="f" style="text-align:left;margin-top:14px"><span>Contraseña</span>
+      <input class="in" id="clave" type="password" autocomplete="current-password" required minlength="8" aria-describedby="loginMsg"></label>
+    <p class="muted" id="loginMsg" role="alert" style="min-height:1.4em;margin:8px 0 0;font-size:14px">${esc(msg || '')}</p>
+    <button class="btn primary" id="loginBtn" type="submit" style="margin-top:10px">Entrar</button></form></div>`;
+  const f = $('#loginForm'), m = $('#loginMsg'), b = $('#loginBtn');
+  setTimeout(() => $('#clave').focus(), 50);
+  f.onsubmit = async ev => {
+    ev.preventDefault();
+    const clave = $('#clave').value;
+    if (!clave) return;
+    b.disabled = true; b.textContent = 'Entrando…'; m.style.color = '';
+    try {
+      const r = await fetch('/api/consola/entrar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.pase) { guardarPase(d.pase); S.user = 'Proveedora'; render(); return start(); }
+      m.style.color = '#FF9AA8';
+      m.textContent = d.sinClave ? 'Falta configurar la contraseña: en Netlify, sitio de la consola, agrega la variable CONSOLA_CLAVE y vuelve a publicar.'
+        : d.bloqueada ? d.error : (d.error || 'No se pudo entrar.') + (d.quedan ? ` Te quedan ${d.quedan} intentos.` : '');
+    } catch { m.style.color = '#FF9AA8'; m.textContent = 'Sin conexión. Revisa tu internet.'; }
+    b.disabled = false; b.textContent = 'Entrar'; $('#clave').select();
+  };
 }
 async function start() { try { await load(); render(); } catch (e) { if (e.message !== 'login') $('#app').innerHTML = `<div class="center"><div class="login"><h1 class="cond">Ups</h1><p class="muted">${esc(e.message)}</p><button class="btn primary" onclick="location.reload()">Reintentar</button></div></div>`; } }
-function boot() {
-  const ni = window.netlifyIdentity; if (!ni) return showLogin();
-  ni.on('init', u => { if (u) { S.user = u.email; render(); start(); } else showLogin(); });
-  ni.on('login', u => { ni.close(); S.user = u.email; render(); start(); });
-  ni.on('logout', () => showLogin());
-  ni.init();
+async function boot() {
+  if (await token()) { S.user = 'Proveedora'; render(); start(); }
+  else showLogin();
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

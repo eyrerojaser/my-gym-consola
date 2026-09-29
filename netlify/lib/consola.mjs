@@ -10,23 +10,46 @@ export const json = (data, status = 200, headers = {}) => new Response(JSON.stri
 });
 export const err = (status, error, extra = {}) => json({ error, ...extra }, status);
 
-// Inicio de sesión: Netlify Identity de la consola (solo la proveedora está invitada)
-const seen = new Map();
-export async function requireUser(req) {
-  const h = req.headers.get('authorization') || '';
-  const token = h.startsWith('Bearer ') ? h.slice(7).trim() : '';
-  if (!token || token.length > 4096) return null;
-  const hit = seen.get(token); if (hit && hit.until > Date.now()) return hit.user;
-  let user = null;
-  if (globalThis.__consolaVerify) user = await globalThis.__consolaVerify(token);
-  else {
-    try {
-      const r = await fetch(new URL('/.netlify/identity/user', req.url), { headers: { Authorization: 'Bearer ' + token } });
-      if (r.ok) { const u = await r.json(); if (u && u.id && u.email) user = { id: u.id, email: u.email }; }
-    } catch {}
+// Inicio de sesión: UNA contraseña, guardada en Netlify como variable CONSOLA_CLAVE (nunca en el código).
+// Al entrar, la consola da un pase firmado que dura 30 días. Cambiar la contraseña invalida todos los pases.
+import { createHmac, createHash, timingSafeEqual, randomBytes } from 'node:crypto';
+const DIAS = 30, MAX_FALLOS = 5, BLOQUEO_MIN = 15;
+export const claveConfigurada = () => String(process.env.CONSOLA_CLAVE || '').length >= 8;
+const h = v => createHash('sha256').update(String(v)).digest();
+async function secreto(st = store()) {
+  let s = await st.get('sesion', { type: 'json' });
+  if (!s || !s.sal) { s = { sal: randomBytes(24).toString('hex') }; await st.setJSON('sesion', s); }
+  return h(s.sal + '|' + process.env.CONSOLA_CLAVE).toString('hex');
+}
+const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+export async function crearPase(st = store()) {
+  const body = b64({ exp: Date.now() + DIAS * 864e5 });
+  return body + '.' + createHmac('sha256', await secreto(st)).update(body).digest('base64url');
+}
+export async function entrar(clave, st = store()) {
+  if (!claveConfigurada()) return { ok: false, sinClave: true };
+  const i = (await st.get('intentos', { type: 'json' })) || { fallos: 0, hasta: 0 };
+  if (i.hasta > Date.now()) return { ok: false, bloqueada: Math.ceil((i.hasta - Date.now()) / 60000) };
+  const ok = typeof clave === 'string' && timingSafeEqual(h(clave), h(process.env.CONSOLA_CLAVE));
+  if (!ok) {
+    i.fallos = (i.fallos || 0) + 1;
+    if (i.fallos >= MAX_FALLOS) { i.hasta = Date.now() + BLOQUEO_MIN * 60000; i.fallos = 0; }
+    await st.setJSON('intentos', i);
+    return { ok: false, quedan: i.hasta > Date.now() ? 0 : MAX_FALLOS - i.fallos, bloqueada: i.hasta > Date.now() ? BLOQUEO_MIN : 0 };
   }
-  if (user) { seen.set(token, { user, until: Date.now() + 60_000 }); if (seen.size > 200) seen.clear(); }
-  return user;
+  await st.setJSON('intentos', { fallos: 0, hasta: 0 });
+  return { ok: true, pase: await crearPase(st) };
+}
+export async function requireUser(req) {
+  if (globalThis.__consolaVerify) { const hh = req.headers.get('authorization') || ''; return globalThis.__consolaVerify(hh.replace(/^Bearer /, '')); }
+  if (!claveConfigurada()) return null;
+  const a = req.headers.get('authorization') || '', t = a.startsWith('Bearer ') ? a.slice(7).trim() : '';
+  const [body, sig] = t.split('.');
+  if (!body || !sig || t.length > 600) return null;
+  const good = createHmac('sha256', await secreto()).update(body).digest('base64url');
+  if (sig.length !== good.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(good))) return null;
+  let p; try { p = JSON.parse(Buffer.from(body, 'base64url').toString()); } catch { return null; }
+  return p && p.exp > Date.now() ? { email: 'Proveedora' } : null;
 }
 
 // ---------- Fechas ----------
