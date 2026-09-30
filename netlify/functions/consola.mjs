@@ -7,6 +7,7 @@
 //   POST /api/consola/clientes/:id/suspender | reactivar | cancelar
 //   DELETE /api/consola/clientes/:id           → quitar de la lista
 import { store, json, err, requireUser, vista, getAjustes, today, addMonth, entrar, claveConfigurada } from '../lib/consola.mjs';
+import { claves, subId, avisar } from '../lib/avisos.mjs';
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const s = (v, n = 300) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
@@ -33,6 +34,40 @@ export default async (req) => {
       if (M === 'PUT') { const b = await req.json(); const aj = { auto: !!b.auto, dias: Math.min(60, Math.max(0, parseInt(b.dias, 10) || 0)) }; await st.setJSON('ajustes', aj); return json(aj); }
     }
     if (area === 'yo' && M === 'GET') return json({ email: user.email });
+
+    // ---- Solicitudes de entrenadoras ----
+    if (area === 'solicitudes') {
+      if (!id && M === 'GET') {
+        const { blobs } = await st.list({ prefix: 'solicitudes/' }), out = [];
+        for (const { key } of blobs) { const x = await st.get(key, { type: 'json' }); if (x) out.push(x); }
+        out.sort((a, b) => b.fecha.localeCompare(a.fecha));
+        return json({ solicitudes: out });
+      }
+      if (!/^[a-f0-9]{24}$/.test(id || '')) return err(404, 'No existe.');
+      const key = `solicitudes/${id}`, x = await st.get(key, { type: 'json' });
+      if (!x) return err(404, 'No existe.');
+      if (M === 'DELETE') { await st.delete(key); return json({ ok: true }); }
+      if (M === 'PUT') {
+        const b = await req.json();
+        if (['nueva', 'contactada', 'creada', 'descartada'].includes(b.estado)) { x.estado = b.estado; x.cambio = today(); }
+        if ('nota' in b) x.nota = typeof b.nota === 'string' ? b.nota.slice(0, 2000) : '';
+        if ('clienteId' in b) x.clienteId = /^[a-f0-9]{24}$/.test(b.clienteId || '') ? b.clienteId : null;
+        await st.setJSON(key, x); return json({ solicitud: x });
+      }
+    }
+
+    // ---- Avisos en este teléfono ----
+    if (area === 'avisos') {
+      if (id === 'clave' && M === 'GET') return json({ publicKey: (await claves(st)).publicKey });
+      if (!id && M === 'POST') {
+        const b = await req.json(), sub = b && b.subscription;
+        if (!sub || typeof sub.endpoint !== 'string' || !/^https:\/\//.test(sub.endpoint) || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) return err(400, 'Suscripción inválida.');
+        await st.setJSON(`avisos/${await subId(sub.endpoint)}`, { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } });
+        return json({ ok: true });
+      }
+      if (!id && M === 'DELETE') { const b = await req.json().catch(() => ({})); if (b.endpoint) await st.delete(`avisos/${await subId(b.endpoint)}`); return json({ ok: true }); }
+      if (id === 'prueba' && M === 'POST') { const n = await avisar({ title: 'Consola Mi Gym', body: 'Los avisos funcionan ✓', url: '/' }, st); return json({ ok: true, enviados: n }); }
+    }
     if (area !== 'clientes') return err(404, 'No existe.');
     const aj = await getAjustes(st);
     if (!id && M === 'GET') {

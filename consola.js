@@ -8,11 +8,12 @@ const I = {
   sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l2.5-7h11L20 13v6H4z"/><path d="M4 13h4.5l1.5 2h4l1.5-2H20"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>',
   warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.5"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
 };
-const S = { user: null, loaded: false, clientes: [], ajustes: { auto: false, dias: 5 }, hoy: '', filtro: 'todos', q: '' };
+const S = { user: null, loaded: false, clientes: [], solicitudes: [], ajustes: { auto: false, dias: 5 }, hoy: '', filtro: 'todos', q: '', sfiltro: 'nueva' };
 let F = null; // formulario abierto
 
 // ---------- conexión ----------
@@ -28,7 +29,7 @@ async function api(method, path, body) {
   if (!r.ok) throw new Error(d.error || 'No se pudo completar.');
   return d;
 }
-async function load() { const d = await api('GET', '/api/consola/clientes'); S.clientes = d.clientes; S.ajustes = d.ajustes; S.hoy = d.hoy; S.loaded = true; }
+async function load() { const [d, so] = await Promise.all([api('GET', '/api/consola/clientes'), api('GET', '/api/consola/solicitudes')]); S.clientes = d.clientes; S.ajustes = d.ajustes; S.hoy = d.hoy; S.solicitudes = so.solicitudes || []; S.loaded = true; }
 function upd(c) { const i = S.clientes.findIndex(x => x.id === c.id); if (i >= 0) S.clientes[i] = c; else S.clientes.push(c); }
 
 // ---------- utilidades ----------
@@ -60,8 +61,11 @@ function render() {
   let h;
   if (a === 'c' && id) { const c = S.clientes.find(x => x.id === id); if (!c) return go('#/'); h = b === 'pago' ? vPago(c) : b === 'editar' ? vEditar(c) : vCliente(c); }
   else if (a === 'ajustes') h = vAjustes();
+  else if (a === 'solicitudes') h = vSolicitudes();
+  else if (a === 's' && id) { const x = S.solicitudes.find(y => y.id === id); if (!x) return go('#/solicitudes'); h = vSolicitud(x); }
   else h = vLista();
   $('#app').innerHTML = h;
+  if (a === 'ajustes') revisarAvisos().then(pintarAvisos);
   const q = $('#q'); if (q) q.oninput = () => { S.q = q.value; const p = q.selectionStart; render(); const n = $('#q'); n.focus(); n.setSelectionRange(p, p); };
 }
 function head(title, sub2, back, right = '') {
@@ -78,12 +82,14 @@ function vLista() {
     .map(([k, l]) => `<button class="chip" data-act="filtro" data-v="${k}" aria-pressed="${S.filtro === k}">${l}</button>`).join('');
   return `<div class="wrap">
     <div class="top"><div class="brand"><span class="brand-ico">${I.grid}</span><span class="brand-name">MI GYM <span>· CONSOLA</span></span></div>
-      <a class="iconbtn" href="#/ajustes" aria-label="Ajustes de la consola">${I.sliders}</a></div>
+      <div style="display:flex;gap:8px"><a class="iconbtn" href="#/solicitudes" aria-label="Solicitudes" style="position:relative">${I.inbox}${nNuevas() ? `<span class="badge">${nNuevas()}</span>` : ''}</a>
+      <a class="iconbtn" href="#/ajustes" aria-label="Ajustes de la consola">${I.sliders}</a></div></div>
     <h1 class="big cond">Mis clientes</h1>
     <div class="tiles">
       <button class="tile" data-act="filtro" data-v="activo"><b>${n('activo')}</b><span class="t-activo">Activos</span></button>
       <button class="tile" data-act="filtro" data-v="debe"><b>${n('debe')}</b><span class="t-debe">Deben</span></button>
       <button class="tile" data-act="filtro" data-v="suspendido"><b>${n('suspendido')}</b><span class="t-suspendido">Suspendidos</span></button></div>
+    ${nNuevas() ? `<a class="alert" href="#/solicitudes" style="background:#1F3A2E;border-color:#2E6B52;color:#C8F5E0">${I.inbox}<span style="flex:1"><b>${nNuevas() === 1 ? '1 entrenadora nueva' : nNuevas() + ' entrenadoras nuevas'}</b> quiere${nNuevas() === 1 ? '' : 'n'} su app</span><b>Ver</b></a>` : ''}
     ${debe.length ? `<a class="alert" href="#/c/${debe[0].id}">${I.warn}<span style="flex:1"><b>${esc(debe[0].appName)}</b> lleva ${debe[0].atraso} ${debe[0].atraso === 1 ? 'día' : 'días'} sin pagar${debe.length > 1 ? ` · y ${debe.length - 1} más` : ''}</span><b>Ver</b></a>` : ''}
     ${n('nuevo') ? `<button class="alert" style="background:#162A45;border-color:#274A75;color:#CFE4FF" data-act="filtro" data-v="nuevo"><span style="flex:1">${n('nuevo') === 1 ? '1 app nueva espera sus datos' : n('nuevo') + ' apps nuevas esperan sus datos'}</span><b>Ver</b></button>` : ''}
     <label class="search">${I.search}<input id="q" type="search" value="${esc(S.q)}" placeholder="Buscar cliente" aria-label="Buscar cliente"></label>
@@ -157,12 +163,80 @@ function vAjustes() {
     <div class="card"><button class="switch" role="switch" aria-checked="${a.auto}" data-act="auto"><span><b>Suspender sola si no paga</b><small>Se reactiva sola al registrar el pago</small></span><span class="track"></span></button>
       ${a.auto ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #232B44;padding-top:12px;margin-top:12px"><span style="font-size:14px;color:#C9CEDC">Días de gracia después de la fecha de pago</span>
         <div class="stepper"><button data-act="dias" data-v="-1" aria-label="Menos días">−</button><b>${a.dias}</b><button data-act="dias" data-v="1" aria-label="Más días">+</button></div></div>` : ''}</div>
+    <div class="card" id="avisosCard">${avisosHTML()}</div>
     <div class="card"><b>Clientes nuevos</b><p class="muted" style="margin:4px 0 0;font-size:14px">Cuando publicas la app de un cliente nuevo, aparece sola en tu lista como <b style="color:#CFE4FF">Nuevo</b>. Solo completas su nombre y su precio.</p></div>
     <div class="card"><b>Solo tú entras aquí</b><p class="muted" style="margin:4px 0 0;font-size:14px">La consola es un sitio aparte. Tus clientas y sus alumnas no la ven ni saben que existe.</p></div>
     <div class="stack"><button class="btn" data-act="logout">Cerrar sesión</button></div></div>`;
 }
+const SLBL = { nueva: 'Nueva', contactada: 'Contactada', creada: 'App creada', descartada: 'Descartada' };
+const SCLS = { nueva: 's-nuevo', contactada: 's-debe', creada: 's-activo', descartada: 's-cancelado' };
+const nNuevas = () => S.solicitudes.filter(x => x.estado === 'nueva').length;
+const fdt = iso => new Date(iso).toLocaleString('es', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+function vSolicitudes() {
+  const list = S.solicitudes.filter(x => S.sfiltro === 'todas' || x.estado === S.sfiltro);
+  const chips = [['nueva', 'Nuevas'], ['contactada', 'Contactadas'], ['creada', 'App creada'], ['descartada', 'Descartadas'], ['todas', 'Todas']]
+    .map(([k, l]) => `<button class="chip" data-act="sfiltro" data-v="${k}" aria-pressed="${S.sfiltro === k}">${l}${k === 'nueva' && nNuevas() ? ' · ' + nNuevas() : ''}</button>`).join('');
+  return `<div class="wrap">${head('Solicitudes', 'Entrenadoras que quieren su app', '#/')}
+    <div class="chips">${chips}</div>
+    <div class="list">${list.map(x => `<a class="row" href="#/s/${x.id}"><span class="ini">${esc(ini(x.negocio || x.nombre))}</span><span class="rt"><b>${esc(x.nombre)}${x.negocio ? ' · ' + esc(x.negocio) : ''}</b><small>${fdt(x.fecha)} · ${x.plan === 'personal' ? 'Personal' : 'Pro'}</small></span><span class="pill ${SCLS[x.estado]}">${SLBL[x.estado]}</span></a>`).join('')
+      || `<div class="empty"><b>${S.solicitudes.length ? 'Nada por aquí' : 'Todavía no hay solicitudes'}</b>${S.solicitudes.length ? 'Prueba con otro filtro.' : 'Cuando una entrenadora llene tu página de registro, aparecerá aquí y te llegará un aviso.'}</div>`}</div></div>`;
+}
+function vSolicitud(x) {
+  const wa = x.whatsapp ? `https://wa.me/${x.whatsapp.replace(/[^\d]/g, '')}?text=${encodeURIComponent(`¡Hola ${x.nombre}! Recibí tu solicitud para tener tu propia app de Mi Gym${x.negocio ? ' para ' + x.negocio : ''}. ¿Cuándo te queda bien que hablemos?`)}` : '';
+  const btn = (est, label, cls = '') => x.estado === est ? '' : `<button class="btn ${cls}" data-act="sestado" data-id="${x.id}" data-v="${est}">${label}</button>`;
+  return `<div class="wrap">${head(x.nombre, x.negocio || 'Solicitud', '#/solicitudes', `<span class="pill ${SCLS[x.estado]}">${SLBL[x.estado]}</span>`)}
+    <div class="stack">
+      ${wa ? `<a class="btn primary" href="${esc(wa)}" target="_blank" rel="noopener">Escribirle por WhatsApp</a>` : ''}
+      <a class="btn" href="mailto:${esc(x.correo)}?subject=${encodeURIComponent('Tu app de Mi Gym')}">Enviarle un correo</a></div>
+    <div class="info">
+      <div><span>Nombre</span><b>${esc(x.nombre)}</b></div>
+      ${x.negocio ? `<div><span>Negocio</span><b>${esc(x.negocio)}</b></div>` : ''}
+      <div><span>Correo</span><b>${esc(x.correo)}</b></div>
+      ${x.whatsapp ? `<div><span>WhatsApp</span><b>${esc(x.whatsapp)}</b></div>` : ''}
+      <div><span>Plan</span><b>${x.plan === 'personal' ? 'Personal' : 'Pro'}</b></div>
+      <div><span>Recibida</span><b>${fdt(x.fecha)}</b></div></div>
+    ${x.mensaje ? `<div class="sectitle">Mensaje</div><div class="card" style="white-space:pre-wrap;font-size:14px">${esc(x.mensaje)}</div>` : ''}
+    <div class="sectitle">¿En qué va?</div>
+    <div class="stack">${btn('contactada', 'Ya la contacté')}${btn('creada', 'Ya le creé su app', 'ok')}${btn('nueva', 'Volver a nueva')}</div>
+    <div style="display:flex;justify-content:center;margin-top:14px">${x.estado === 'descartada' ? `<button class="btn link" data-act="sborrar" data-id="${x.id}">Borrar solicitud</button>` : `<button class="btn link" data-act="sestado" data-id="${x.id}" data-v="descartada">Descartar</button>`}</div></div>`;
+}
 function addMonth(iso) { const [y, m, d] = iso.split('-').map(Number); const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); return new Date(Date.UTC(y, m, Math.min(d, last))).toISOString().slice(0, 10); }
 function addDays(iso, n) { const t = new Date(iso + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
+
+// ---------- avisos en este teléfono ----------
+const AV = { estado: 'cargando' };
+const b64u = s => { const p = '='.repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+async function revisarAvisos() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) { AV.estado = esIOS() && !standalone() ? 'instalar' : 'nosoporta'; return; }
+  try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); AV.estado = sub && Notification.permission === 'granted' ? 'activo' : (Notification.permission === 'denied' ? 'bloqueado' : 'apagado'); }
+  catch { AV.estado = 'apagado'; }
+}
+function avisosHTML() {
+  const t = { cargando: 'Revisando…', activo: 'Activos en este teléfono ✓', apagado: 'Apagados en este teléfono', bloqueado: 'Bloqueados: permítelos en los ajustes del teléfono para esta app.',
+    instalar: 'En iPhone primero agrega la consola a tu pantalla de inicio (Compartir → Agregar a pantalla de inicio) y ábrela desde ese ícono.', nosoporta: 'Este navegador no permite avisos.' }[AV.estado];
+  return `<b>Avisos en este teléfono</b><p class="muted" style="margin:4px 0 10px;font-size:14px">Te avisa cuando una entrenadora pide su app. ${esc(t)}</p>
+    ${AV.estado === 'activo' ? `<div class="two" style="margin-top:0"><button class="btn" data-act="avisos-prueba">Probar aviso</button><button class="btn" data-act="avisos-off">Apagar</button></div>`
+      : AV.estado === 'apagado' ? `<button class="btn primary" data-act="avisos-on">Activar avisos</button>` : ''}`;
+}
+function pintarAvisos() { const c = $('#avisosCard'); if (c) c.innerHTML = avisosHTML(); }
+async function activarAvisos() {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { AV.estado = perm === 'denied' ? 'bloqueado' : 'apagado'; return pintarAvisos(); }
+    const { publicKey } = await api('GET', '/api/consola/avisos/clave');
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(publicKey) });
+    await api('POST', '/api/consola/avisos', { subscription: sub.toJSON() });
+    AV.estado = 'activo'; pintarAvisos(); toast('Avisos activados ✓');
+  } catch (er) { if (er.message !== 'login') toast('No se pudieron activar los avisos: ' + er.message, true); }
+}
+async function desactivarAvisos() {
+  try { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+    if (sub) { await api('DELETE', '/api/consola/avisos', { endpoint: sub.endpoint }); await sub.unsubscribe(); }
+    AV.estado = 'apagado'; pintarAvisos(); toast('Avisos apagados'); } catch (er) { if (er.message !== 'login') toast(er.message, true); }
+}
 
 // ---------- eventos ----------
 document.addEventListener('input', e => { const el = e.target; if (F && el.dataset.k) F.d[el.dataset.k] = el.value; });
@@ -172,6 +246,17 @@ document.addEventListener('click', async e => {
   if (el.tagName === 'BUTTON') e.preventDefault();
   const run = async (fn, ok) => { el.disabled = true; try { const r = await fn(); if (r && r.cliente) upd(r.cliente); if (ok) toast(ok); return true; } catch (er) { if (er.message !== 'login') toast(er.message, true); el.disabled = false; return false; } };
   switch (act) {
+    case 'sfiltro': S.sfiltro = el.dataset.v; return render();
+    case 'sestado': {
+      try { const r = await api('PUT', `/api/consola/solicitudes/${id}`, { estado: el.dataset.v }); const i = S.solicitudes.findIndex(x => x.id === id); S.solicitudes[i] = r.solicitud; render();
+        toast({ contactada: 'Marcada como contactada', creada: '¡Listo! Ahora complétala en Mis clientes cuando aparezca', nueva: 'Marcada como nueva', descartada: 'Descartada' }[el.dataset.v]); }
+      catch (er) { if (er.message !== 'login') toast(er.message, true); } return;
+    }
+    case 'sborrar': if (!confirm('¿Borrar esta solicitud?')) return;
+      try { await api('DELETE', `/api/consola/solicitudes/${id}`); S.solicitudes = S.solicitudes.filter(x => x.id !== id); go('#/solicitudes'); } catch (er) { if (er.message !== 'login') toast(er.message, true); } return;
+    case 'avisos-on': return activarAvisos();
+    case 'avisos-off': return desactivarAvisos();
+    case 'avisos-prueba': try { const r = await api('POST', '/api/consola/avisos/prueba'); toast(r.enviados ? 'Aviso enviado ✓' : 'No hay teléfonos con avisos activos.', !r.enviados); } catch (er) { if (er.message !== 'login') toast(er.message, true); } return;
     case 'filtro': S.filtro = S.filtro === el.dataset.v && el.classList.contains('tile') ? 'todos' : el.dataset.v; return render();
     case 'opt': F.d[el.dataset.k] = el.dataset.v; return render();
     case 'propia': F.d.propia = !F.d.propia; return render();
@@ -234,6 +319,7 @@ function showLogin(msg) {
 }
 async function start() { try { await load(); render(); } catch (e) { if (e.message !== 'login') $('#app').innerHTML = `<div class="center"><div class="login"><h1 class="cond">Ups</h1><p class="muted">${esc(e.message)}</p><button class="btn primary" onclick="location.reload()">Reintentar</button></div></div>`; } }
 async function boot() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   if (await token()) { S.user = 'Proveedora'; render(); start(); }
   else showLogin();
 }

@@ -29,5 +29,15 @@ USO
 - Ajustes: "Suspender sola si no paga" y los días de gracia.
 - Tu propia app: ábrela, toca "Completar datos" y activa "Es mi propia app" (siempre activa, sin cobro).
 
+SOLICITUDES DE ENTRENADORAS
+- Cuando alguien llena "Soy entrenadora" en tuapp.netlify.app/registro, aparece en
+  Solicitudes (ícono de bandeja arriba, con un número) y te llega un aviso al teléfono.
+- En cada solicitud: Escribirle por WhatsApp · Enviarle un correo · Ya la contacté ·
+  Ya le creé su app · Descartar.
+- Para recibir los avisos: en el iPhone, agrega la consola a tu pantalla de inicio y
+  ábrela desde ese ícono > Ajustes > Activar avisos > Permitir. Toca "Probar aviso".
+- Importante: en Mis clientes, tu app debe estar marcada como "Es mi propia app";
+  solo así funciona el registro de entrenadoras.
+
 Si la consola no responde por algún motivo, las apps de tus clientas SIGUEN funcionando:
 nunca se bloquea a nadie por un error.

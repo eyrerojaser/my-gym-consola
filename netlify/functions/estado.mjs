@@ -29,7 +29,7 @@ export default async (req) => {
     if ((url && url !== c.url) || (appName && appName !== c.appName)) { c.url = url || c.url; if (appName) c.appName = appName; c.visto = today(); await st.setJSON(key, c); }
   }
   const v = vista(c, aj);
-  return json({ estado: bloquea(v.efectivo) ? 'suspendido' : 'activo', motivo: v.efectivo });
+  return json({ estado: bloquea(v.efectivo) ? 'suspendido' : 'activo', motivo: v.efectivo, propia: !!c.propia });
 };
 
 export const config = { path: '/api/estado' };
