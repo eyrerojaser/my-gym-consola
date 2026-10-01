@@ -8,6 +8,7 @@
 //   DELETE /api/consola/clientes/:id           → quitar de la lista
 import { store, json, err, requireUser, vista, getAjustes, today, addMonth, entrar, claveConfigurada } from '../lib/consola.mjs';
 import { claves, subId, avisar } from '../lib/avisos.mjs';
+import { createHash } from 'node:crypto';
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const s = (v, n = 300) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
@@ -111,6 +112,12 @@ export default async (req) => {
         if (c.proximoPago && c.proximoPago < today() && aj.auto) c.gracia = today();
         return save(); }
       if (accion === 'cancelar') { c.estado = 'cancelado'; c.canceladaDesde = today(); return save(); }
+      if (accion === 'codigo-acceso') {  // código para que la entrenadora active "Mi Panel" en su app (7 días, un solo uso)
+        const CR = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        const codigo = Array.from(crypto.getRandomValues(new Uint8Array(12)), x => CR[x % CR.length]).join('').match(/.{4}/g).join('-');
+        c.acceso = { hash: createHash('sha256').update('migym-acceso:' + codigo.replace(/-/g, '')).digest('hex'), exp: Date.now() + 7 * 864e5 };
+        await st.setJSON(key, c); return json({ codigo, cliente: vista(c, aj) });
+      }
     }
     return err(404, 'No existe.');
   } catch (e) { console.error(e); return err(500, 'No se pudo completar. Inténtalo otra vez.'); }

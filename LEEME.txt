@@ -29,6 +29,12 @@ USO
 - Ajustes: "Suspender sola si no paga" y los días de gracia.
 - Tu propia app: ábrela, toca "Completar datos" y activa "Es mi propia app" (siempre activa, sin cobro).
 
+ACCESO DE CADA ENTRENADORA A SU PANEL
+- En la ficha del cliente: "Acceso a su panel" > Generar código de acceso > WhatsApp.
+- Ella lo escribe en su app (Ajustes > Mi cuenta > "Soy la entrenadora de esta app")
+  y le aparece "Mi Panel". Vale 7 días y se usa una sola vez.
+- Abajo ves quién lo activó y cuándo. Para otra persona, genera otro código.
+
 SOLICITUDES DE ENTRENADORAS
 - Cuando alguien llena "Soy entrenadora" en tuapp.netlify.app/registro, aparece en
   Solicitudes (ícono de bandeja arriba, con un número) y te llega un aviso al teléfono.

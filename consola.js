@@ -123,6 +123,14 @@ function vCliente(c) {
       <div><span>Dirección</span><b>${esc(c.url.replace(/^https?:\/\//, ''))}</b></div></div>
     <div class="two"><a class="btn" href="${esc(c.url)}/" target="_blank" rel="noopener">Abrir su app</a><a class="btn" href="${esc(c.url)}/panel/" target="_blank" rel="noopener">Abrir su panel</a></div>
     <div class="two" style="grid-template-columns:1fr"><a class="btn" href="#/c/${c.id}/editar">Editar datos</a></div>
+    ${e === 'cancelado' ? '' : `<div class="sectitle">Acceso a su panel</div>
+    <div class="card" style="font-size:14px">
+      <p class="muted" style="margin:0 0 10px">La entrenadora crea su cuenta en su app y en Ajustes → Mi cuenta toca "Soy la entrenadora de esta app" y escribe este código. Vale 7 días y se usa una sola vez.</p>
+      ${ACCESO[c.id] ? `<div style="font-size:24px;font-weight:900;letter-spacing:.08em;text-align:center;margin:6px 0 10px">${esc(ACCESO[c.id])}</div>
+        <div class="two" style="margin-top:0"><button class="btn" data-act="copiar" data-v="${esc(ACCESO[c.id])}">Copiar</button>
+        <a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`Tu código para entrar a tu panel: ${ACCESO[c.id]}\n1) Abre tu app: ${c.url}\n2) ⋯ → Ajustes → Mi cuenta → crea tu cuenta (o inicia sesión)\n3) Toca "Soy la entrenadora de esta app" y escribe el código.\nVale 7 días.`)}">WhatsApp</a></div>`
+      : `<button class="btn" data-act="acceso" data-id="${c.id}">Generar código de acceso</button>`}
+      ${(c.accesos || []).length ? `<p class="muted" style="margin:10px 0 0">Con acceso: ${(c.accesos || []).map(x => esc(x.email || 'sin correo') + ' (' + fd(x.fecha) + ')').join(', ')}</p>` : ''}</div>`}
     ${c.notas ? `<div class="sectitle">Notas</div><div class="card" style="white-space:pre-wrap;font-size:14px">${esc(c.notas)}</div>` : ''}
     ${c.propia ? '' : `<div class="sectitle">Pagos</div><div class="stack" style="gap:6px">${pagos || '<p class="muted" style="margin:4px 2px">Todavía no hay pagos registrados.</p>'}</div>`}
     <div style="display:flex;justify-content:center;margin-top:18px">${e === 'cancelado' ? `<button class="btn link" data-act="quitar" data-id="${c.id}">Quitar de la lista</button>` : (c.propia ? '' : `<button class="btn link" data-act="cancelar" data-id="${c.id}">Cancelar cliente</button>`)}</div></div>`;
@@ -168,6 +176,7 @@ function vAjustes() {
     <div class="card"><b>Solo tú entras aquí</b><p class="muted" style="margin:4px 0 0;font-size:14px">La consola es un sitio aparte. Tus clientas y sus alumnas no la ven ni saben que existe.</p></div>
     <div class="stack"><button class="btn" data-act="logout">Cerrar sesión</button></div></div>`;
 }
+const ACCESO = {};  // códigos recién generados (solo se muestran en esta sesión)
 const SLBL = { nueva: 'Nueva', contactada: 'Contactada', creada: 'App creada', descartada: 'Descartada' };
 const SCLS = { nueva: 's-nuevo', contactada: 's-debe', creada: 's-activo', descartada: 's-cancelado' };
 const nNuevas = () => S.solicitudes.filter(x => x.estado === 'nueva').length;
@@ -247,6 +256,8 @@ document.addEventListener('click', async e => {
   const run = async (fn, ok) => { el.disabled = true; try { const r = await fn(); if (r && r.cliente) upd(r.cliente); if (ok) toast(ok); return true; } catch (er) { if (er.message !== 'login') toast(er.message, true); el.disabled = false; return false; } };
   switch (act) {
     case 'sfiltro': S.sfiltro = el.dataset.v; return render();
+    case 'acceso': try { const r = await api('POST', `/api/consola/clientes/${id}/codigo-acceso`); ACCESO[id] = r.codigo; upd(r.cliente); render(); } catch (er) { if (er.message !== 'login') toast(er.message, true); } return;
+    case 'copiar': try { await navigator.clipboard.writeText(el.dataset.v); toast('Copiado ✓'); } catch { prompt('Copia el código:', el.dataset.v); } return;
     case 'sestado': {
       try { const r = await api('PUT', `/api/consola/solicitudes/${id}`, { estado: el.dataset.v }); const i = S.solicitudes.findIndex(x => x.id === id); S.solicitudes[i] = r.solicitud; render();
         toast({ contactada: 'Marcada como contactada', creada: '¡Listo! Ahora complétala en Mis clientes cuando aparezca', nueva: 'Marcada como nueva', descartada: 'Descartada' }[el.dataset.v]); }
